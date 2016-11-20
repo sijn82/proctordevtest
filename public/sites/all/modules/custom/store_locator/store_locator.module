@@ -1,0 +1,227 @@
+<?php 
+
+/**
+ * 
+ * This module is where you need to write your custom importer.
+ * The info file includes a css file on every page
+ * 
+ * There is a menu hook below which creates a page http://drupalinterview.local/store_locator/import
+ * There is a form defined already with a box to enter the CSV data
+ * 
+ * You should write your submit handler in the store_locator_import_submit function
+ * 
+ */
+
+/**
+ * Implements hook_menu
+ *
+ * Setting up our menu options
+ * @return array
+ *
+ */
+function store_locator_menu()
+{
+    $items['store_locator/import'] = array(
+        'title' => 'Import Stores',
+        'description' => 'Import Stores in to the system',
+        'page callback' => 'drupal_get_form',
+        'page arguments' => array('store_locator_import'),
+        'access callback' => TRUE,
+    );
+    
+    $items['store_locator/list'] = array(
+        'title' => 'List Stores',
+        'description' => 'View all stores',
+        'page callback' => 'store_locator_view_all',
+        'access callback' => TRUE,
+    );
+    
+    $items['store_locator/store/%'] = array(
+        'title' => 'Store Details',
+        'description' => 'View a single store',
+        'page callback' => 'store_locator_view_store',
+        'page arguments' => array(2),
+        'access callback' => TRUE,
+    );
+    
+    return $items;
+}
+
+/**
+ * This function is where your form is built
+ * 
+ * @param array $form
+ * @param array $form_state
+ */
+function store_locator_import($form, &$form_state)
+{
+    $form['notes'] = array(
+        '#type' => 'markup',
+        '#markup' => '<h2>Paste your CSV data in to the text area below</h2>',
+    );
+    $form['csv_data'] = array(
+        '#title' => t("CSV Data"),
+        '#type' => 'textarea',
+        '#description' => 'Paste your CSV data in here.',
+    );
+    
+    $form['submit'] = array(
+        '#type' => 'submit',
+        '#value' => t('Update'),
+    );
+    
+    return $form;
+}
+
+/**
+ * This is the function that will process the data submitted in the form 
+ * Process your import in here
+ * 
+ * @param array $form
+ * @param array $form_state
+ */
+function store_locator_import_submit($form, &$form_state)
+{
+
+    
+    //the submitted form data will be in here
+    //dpm($form_state);
+    //The CSV data will be in $form_state['values']['csv_data']
+    //dpm($form_state['values']['csv_data']);
+    
+    $csv = array();
+    $split = explode("\n", $form_state['values']['csv_data']);
+
+    foreach($split as $row){
+        $csv[] = str_getcsv($row);
+    }
+
+    $i = 0;
+    while ($i < count($csv)) {
+        if($csv[$i][5] == "" || $csv[$i][6] == "") {
+
+            $address_search = $csv[$i][1];
+            $encode = urlencode($address_search);
+            $search_url = "https://maps.googleapis.com/maps/api/geocode/json?address=".$encode."&key=AIzaSyC2SLBckSDCpxvR_C3A07CwRFNApib7Qak";
+           
+            $json = file_get_contents($search_url);
+            $results = json_decode($json, true);
+            //var_dump($search_url);   
+
+            $lat = $results["results"][0]["geometry"]["location"]["lat"];
+            $long = $results["results"][0]["geometry"]["location"]["lng"];
+            $csv[$i][5] = $lat;
+            $csv[$i][6] = $long;
+
+            //Create node programmatically from submitted data
+
+            $node = new stdClass();
+            $node->title = $csv[$i][0];
+            $node->type = 'Store';
+            node_object_prepare($node); 
+            $node->language = LANGUAGE_NONE; 
+            $node->status = 1;
+            $node->promote = 0;
+            $node->comment = 1;
+
+           
+            $node->body[$node->language][0]['value'] = '';
+            $node->body[$node->language][0]['summary'] = '';
+            $node->body[$node->language][0]['format'] = 'filtered_html';
+            $node->field_address[$node->language][0]['value'] = $csv[$i][1];
+            $node->field_phone_number[$node->language][0]['value'] = $csv[$i][2];
+            $node->field_site_manager[$node->language][0]['value'] = $csv[$i][3];
+            $node->field_store_type[$node->language][0]['value'] = $csv[$i][4];
+            $node->field_latitude[$node->language][0]['value'] = $csv[$i][5];
+            $node->field_longitude[$node->language][0]['value'] = $csv[$i][6];
+                
+            
+            $query = new EntityFieldQuery();
+            $query->entityCondition('entity_type', 'node')
+                ->propertyCondition('title', $csv[$i][0]);
+
+            $result = $query->execute();
+            if (empty($result['node'])) {
+
+                $node = node_submit($node);
+                node_save($node);
+
+            } 
+  
+        }else {     
+                //Create node programmatically from submitted data
+
+            $node = new stdClass();
+            $node->title = $csv[$i][0];
+            $node->type = "Store";
+            node_object_prepare($node);
+            $node->language = LANGUAGE_NONE; 
+            $node->status = 1; 
+            $node->promote = 0; 
+            $node->comment = 0; 
+
+            $node->body[$node->language][0]['value'] = 'This is a body text';
+            $node->body[$node->language][0]['summary'] = 'Here goes a summary';
+            $node->body[$node->language][0]['format'] = 'filtered_html'; 
+
+            $node->field_address[$node->language][0]['value'] = $csv[$i][1];
+            $node->field_phone_number[$node->language][0]['value'] = $csv[$i][2];
+            $node->field_site_manager[$node->language][0]['value'] = $csv[$i][3];
+            $node->field_store_type[$node->language][0]['value'] = $csv[$i][4];
+            $node->field_latitude[$node->language][0]['value'] = $csv[$i][5];
+            $node->field_longitude[$node->language][0]['value'] = $csv[$i][6];
+                
+            
+            $query = new EntityFieldQuery();
+            $query->entityCondition('entity_type', 'node')
+                ->propertyCondition('title', $csv[$i][0]);
+
+            $result = $query->execute();
+            if (empty($result['node'])) {
+
+                $node = node_submit($node); 
+                node_save($node);
+            } 
+            
+        }
+        $i++;
+
+
+    }
+
+    //    var_dump($csv);
+    //die();
+
+    return $csv;
+
+    //HINT: Use str-getcsv or fgetcsv to parse the string in to an array
+    //http://php.net/manual/en/function.str-getcsv.php http://php.net/manual/en/function.fgetcsv.php   
+}
+
+
+
+/**
+ * Functions for the Non Drupal task below
+ */
+
+
+
+/*
+ * Do your store lookup in this function and just return the HTML
+ * Access this function by visiting /store_locator/list
+ * Create links to /store_locator/store/{id} for the individual store pages
+ */
+function store_locator_view_all()
+{
+    $html = 'Your HTML Here.';
+    return $html;
+}
+
+/*
+ * The store ID is passed straight in to this function
+ */
+function store_locator_view_store($storeId)
+{
+    $html = 'The Store ID is ' . $storeId;
+    return $html;
+}
