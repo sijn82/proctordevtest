@@ -102,7 +102,7 @@ function store_locator_import_submit($form, &$form_state)
 
             $address_search = $csv[$i][1];
             $encode = urlencode($address_search);
-            $search_url = "https://maps.googleapis.com/maps/api/geocode/json?address=".$encode."&key=AIzaSyC2SLBckSDCpxvR_C3A07CwRFNApib7Qak";
+            $search_url = "https://maps.googleapis.com/maps/api/geocode/json?address=".$encode;
            
             $json = file_get_contents($search_url);
             $results = json_decode($json, true);
